@@ -1,6 +1,7 @@
 [package]
-name = "OkayYouVeryPro"
+name = "okay-you-very-pro"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
 
 [dependencies]
+iced = { version = "0.10", features = ["canvas", "tokio"] }
