@@ -4,11 +4,15 @@ use iced::theme::{self, Container as ThemeContainer, Text as TextTheme};
 use iced::widget::{column, container, row, scrollable, text, Container, Text};
 use iced::Color;
 use iced::Font;
-use iced::{Element, Length, Sandbox, Settings, Theme};
+use iced::{Application, Element, Length, Settings, Theme};
+use image;
+use tracing::{error, info, warn};
 
 mod colors;
+mod config;
 mod my_text;
 use colors::*;
+use config::Config;
 use my_text::*;
 
 // Define the custom font
@@ -41,13 +45,17 @@ struct StatsViewer {
 
 #[derive(Debug, Clone)]
 enum Message {
-    // Add messages here when we need interaction
+    WindowResized(u32, u32),
 }
 
-impl Sandbox for StatsViewer {
+impl Application for StatsViewer {
     type Message = Message;
+    type Theme = Theme;
+    type Executor = iced::executor::Default;
+    type Flags = ();
 
-    fn new() -> Self {
+    fn new(_flags: ()) -> (Self, iced::Command<Message>) {
+        info!("Initializing StatsViewer");
         // Initialize with sample data
         let team1 = vec![
             Player {
@@ -319,15 +327,42 @@ impl Sandbox for StatsViewer {
             },
         ];
 
-        StatsViewer { team1, team2 }
+        (StatsViewer { team1, team2 }, iced::Command::none())
     }
 
     fn title(&self) -> String {
         String::from("Okay You Very Pro")
     }
 
-    fn update(&mut self, _message: Message) {
-        // Handle updates when we add interaction
+    fn subscription(&self) -> iced::Subscription<Message> {
+        iced::subscription::events().map(|event| {
+            if let iced::Event::Window(window_event) = event {
+                if let iced::window::Event::Resized { width, height } = window_event {
+                    Message::WindowResized(width, height)
+                } else {
+                    Message::WindowResized(0, 0) // This won't be used
+                }
+            } else {
+                Message::WindowResized(0, 0) // This won't be used
+            }
+        })
+    }
+
+    fn update(&mut self, message: Message) -> iced::Command<Message> {
+        match message {
+            Message::WindowResized(width, height) => {
+                if width > 0 && height > 0 {
+                    info!("Window resized to {}x{}", width, height);
+                    let mut config = Config::load();
+                    info!("Current config: {:?}", config);
+                    config.window_width = width;
+                    config.window_height = height;
+                    info!("Updating config to: {:?}", config);
+                    config.save();
+                }
+            }
+        }
+        iced::Command::none()
     }
 
     fn view(&self) -> Element<Message> {
@@ -502,7 +537,39 @@ impl scrollable::StyleSheet for CustomScrollable {
 }
 
 fn main() -> iced::Result {
+    // Initialize tracing
+    let file_appender = tracing_appender::rolling::RollingFileAppender::new(
+        tracing_appender::rolling::Rotation::DAILY,
+        "logs",
+        "app.log",
+    );
+
+    let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
+    tracing_subscriber::fmt()
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .with_writer(non_blocking)
+        .init();
+
+    info!("Starting application");
+    let config = Config::load();
+    info!("Loaded initial config: {:?}", config);
     let mut settings = Settings::default();
-    settings.window.size = (800, 600);
+    settings.window.size = (config.window_width, config.window_height);
+    settings.window.resizable = true;
+
+    // Load and set the icon
+    if let Ok(icon) = image::open("assets/icon.png") {
+        let (width, height) = (icon.width(), icon.height());
+        let rgba_bytes = icon.into_rgba8().into_raw();
+        settings.window.icon = Some(
+            iced::window::icon::from_rgba(rgba_bytes, width, height)
+                .expect("Failed to create icon"),
+        );
+    }
+
+    info!(
+        "Starting with window size: {}x{}",
+        config.window_width, config.window_height
+    );
     StatsViewer::run(settings)
 }
