@@ -1,10 +1,15 @@
 use iced::application::StyleSheet;
 use iced::font::Weight;
 use iced::theme::{self, Container as ThemeContainer, Text as TextTheme};
-use iced::widget::{column, container, row, text, Container, Text};
+use iced::widget::{column, container, row, scrollable, text, Container, Text};
 use iced::Color;
 use iced::Font;
 use iced::{Element, Length, Sandbox, Settings, Theme};
+
+mod colors;
+mod my_text;
+use colors::*;
+use my_text::*;
 
 // Define the custom font
 const CUSTOM_FONT: Font = Font {
@@ -18,13 +23,14 @@ const CUSTOM_FONT: Font = Font {
 #[derive(Debug, Clone)]
 struct Player {
     name: String,
-    clan: String,
     winrate: f32,
     battles: u32,
-    karma: i32,
+    ship_name: String,
+    ship_winrate: f32,
+    ship_battles: u32,
     pr: u32,
     avg_damage: f32,
-    wins: u32,
+    frags: f32,
 }
 
 // Main application state
@@ -45,127 +51,271 @@ impl Sandbox for StatsViewer {
         // Initialize with sample data
         let team1 = vec![
             Player {
-                name: "NKstardream".to_string(),
-                clan: "[KA-ZE]".to_string(),
+                name: "Alpha".to_string(),
                 winrate: 49.96,
                 battles: 2754,
-                karma: 0,
+                ship_name: "Ship1".to_string(),
+                ship_winrate: 48.5,
+                ship_battles: 156,
                 pr: 856,
                 avg_damage: 84849.0,
-                wins: 19,
+                frags: 0.8,
             },
             Player {
-                name: "Satsuma".to_string(),
-                clan: "[NAVA]".to_string(),
+                name: "Beta".to_string(),
                 winrate: 47.22,
                 battles: 4852,
-                karma: 0,
+                ship_name: "Ship2".to_string(),
+                ship_winrate: 51.2,
+                ship_battles: 342,
                 pr: 1425,
                 avg_damage: 132932.0,
-                wins: 282,
+                frags: 1.2,
             },
             Player {
-                name: "Vermont".to_string(),
-                clan: "[DAR]".to_string(),
+                name: "Charlie".to_string(),
                 winrate: 43.45,
                 battles: 1991,
-                karma: 0,
+                ship_name: "Ship3".to_string(),
+                ship_winrate: 46.8,
+                ship_battles: 89,
                 pr: 485,
                 avg_damage: 57493.0,
-                wins: 64,
+                frags: 0.6,
             },
             Player {
-                name: "Musashi".to_string(),
-                clan: "[TH_P]".to_string(),
+                name: "Delta".to_string(),
                 winrate: 45.02,
                 battles: 844,
-                karma: 0,
+                ship_name: "Ship4".to_string(),
+                ship_winrate: 44.9,
+                ship_battles: 234,
                 pr: 892,
                 avg_damage: 71441.0,
-                wins: 7,
+                frags: 0.7,
             },
             Player {
-                name: "Jinan".to_string(),
-                clan: "[SSR-I]".to_string(),
+                name: "Echo".to_string(),
                 winrate: 48.53,
                 battles: 5110,
-                karma: 0,
+                ship_name: "Ship5".to_string(),
+                ship_winrate: 52.1,
+                ship_battles: 445,
                 pr: 447,
                 avg_damage: 45591.0,
-                wins: 4,
+                frags: 0.9,
             },
             Player {
-                name: "Petropavlovsk".to_string(),
-                clan: "".to_string(),
+                name: "Foxtrot".to_string(),
                 winrate: 47.3,
                 battles: 9349,
-                karma: 0,
+                ship_name: "Ship6".to_string(),
+                ship_winrate: 49.9,
+                ship_battles: 678,
                 pr: 1248,
                 avg_damage: 51313.0,
-                wins: 42,
+                frags: 1.1,
+            },
+            Player {
+                name: "Mike".to_string(),
+                winrate: 51.23,
+                battles: 3245,
+                ship_name: "Ship13".to_string(),
+                ship_winrate: 52.8,
+                ship_battles: 234,
+                pr: 1256,
+                avg_damage: 98765.0,
+                frags: 1.3,
+            },
+            Player {
+                name: "November".to_string(),
+                winrate: 48.76,
+                battles: 4123,
+                ship_name: "Ship14".to_string(),
+                ship_winrate: 47.5,
+                ship_battles: 345,
+                pr: 892,
+                avg_damage: 65432.0,
+                frags: 0.8,
+            },
+            Player {
+                name: "Oscar".to_string(),
+                winrate: 52.34,
+                battles: 2876,
+                ship_name: "Ship15".to_string(),
+                ship_winrate: 53.2,
+                ship_battles: 456,
+                pr: 1456,
+                avg_damage: 112345.0,
+                frags: 1.4,
+            },
+            Player {
+                name: "Papa".to_string(),
+                winrate: 46.78,
+                battles: 5678,
+                ship_name: "Ship16".to_string(),
+                ship_winrate: 45.9,
+                ship_battles: 567,
+                pr: 678,
+                avg_damage: 45678.0,
+                frags: 0.7,
+            },
+            Player {
+                name: "Quebec".to_string(),
+                winrate: 50.12,
+                battles: 3456,
+                ship_name: "Ship17".to_string(),
+                ship_winrate: 51.5,
+                ship_battles: 678,
+                pr: 1234,
+                avg_damage: 87654.0,
+                frags: 1.0,
+            },
+            Player {
+                name: "Romeo".to_string(),
+                winrate: 49.87,
+                battles: 4321,
+                ship_name: "Ship18".to_string(),
+                ship_winrate: 48.7,
+                ship_battles: 789,
+                pr: 987,
+                avg_damage: 76543.0,
+                frags: 0.9,
             },
         ];
 
         let team2 = vec![
             Player {
-                name: "PandaSlime".to_string(),
-                clan: "[DWBH]".to_string(),
+                name: "Golf".to_string(),
                 winrate: 49.92,
                 battles: 2644,
-                karma: 0,
+                ship_name: "Ship7".to_string(),
+                ship_winrate: 53.4,
+                ship_battles: 223,
                 pr: 1350,
                 avg_damage: 103170.0,
-                wins: 122,
+                frags: 1.2,
             },
             Player {
-                name: "warm_light37".to_string(),
-                clan: "[SIGN]".to_string(),
+                name: "Hotel".to_string(),
                 winrate: 49.49,
                 battles: 2623,
-                karma: 0,
+                ship_name: "Ship8".to_string(),
+                ship_winrate: 47.8,
+                ship_battles: 167,
                 pr: 1121,
                 avg_damage: 139917.0,
-                wins: 59,
+                frags: 1.1,
             },
             Player {
-                name: "AlbertvonBismarck".to_string(),
-                clan: "[SJTU]".to_string(),
+                name: "India".to_string(),
                 winrate: 49.74,
                 battles: 2280,
-                karma: 0,
+                ship_name: "Ship9".to_string(),
+                ship_winrate: 50.2,
+                ship_battles: 445,
                 pr: 1236,
                 avg_damage: 105548.0,
-                wins: 45,
+                frags: 1.0,
             },
             Player {
-                name: "Shikishima".to_string(),
-                clan: "[EZ]".to_string(),
+                name: "Juliet".to_string(),
                 winrate: 47.21,
                 battles: 2923,
-                karma: 0,
+                ship_name: "Ship10".to_string(),
+                ship_winrate: 46.9,
+                ship_battles: 332,
                 pr: 892,
                 avg_damage: 92047.0,
-                wins: 39,
+                frags: 0.8,
             },
             Player {
-                name: "Minnesota".to_string(),
-                clan: "[ROYAL]".to_string(),
+                name: "Kilo".to_string(),
                 winrate: 53.43,
                 battles: 3509,
-                karma: 0,
+                ship_name: "Ship11".to_string(),
+                ship_winrate: 55.6,
+                ship_battles: 221,
                 pr: 962,
                 avg_damage: 66757.0,
-                wins: 6,
+                frags: 1.3,
             },
             Player {
-                name: "Bremus".to_string(),
-                clan: "[SAIKO]".to_string(),
+                name: "Lima".to_string(),
                 winrate: 51.96,
                 battles: 4419,
-                karma: 0,
+                ship_name: "Ship12".to_string(),
+                ship_winrate: 50.8,
+                ship_battles: 554,
                 pr: 1009,
                 avg_damage: 119177.0,
-                wins: 19,
+                frags: 1.4,
+            },
+            Player {
+                name: "Sierra".to_string(),
+                winrate: 48.45,
+                battles: 3789,
+                ship_name: "Ship19".to_string(),
+                ship_winrate: 49.2,
+                ship_battles: 456,
+                pr: 876,
+                avg_damage: 67890.0,
+                frags: 0.9,
+            },
+            Player {
+                name: "Tango".to_string(),
+                winrate: 52.67,
+                battles: 2987,
+                ship_name: "Ship20".to_string(),
+                ship_winrate: 54.1,
+                ship_battles: 567,
+                pr: 1345,
+                avg_damage: 98765.0,
+                frags: 1.5,
+            },
+            Player {
+                name: "Uniform".to_string(),
+                winrate: 47.89,
+                battles: 4567,
+                ship_name: "Ship21".to_string(),
+                ship_winrate: 46.8,
+                ship_battles: 678,
+                pr: 765,
+                avg_damage: 54321.0,
+                frags: 0.7,
+            },
+            Player {
+                name: "Victor".to_string(),
+                winrate: 50.34,
+                battles: 3456,
+                ship_name: "Ship22".to_string(),
+                ship_winrate: 51.7,
+                ship_battles: 789,
+                pr: 1123,
+                avg_damage: 87654.0,
+                frags: 1.1,
+            },
+            Player {
+                name: "Whiskey".to_string(),
+                winrate: 49.56,
+                battles: 4321,
+                ship_name: "Ship23".to_string(),
+                ship_winrate: 48.9,
+                ship_battles: 890,
+                pr: 987,
+                avg_damage: 76543.0,
+                frags: 0.8,
+            },
+            Player {
+                name: "Xray".to_string(),
+                winrate: 51.78,
+                battles: 2987,
+                ship_name: "Ship24".to_string(),
+                ship_winrate: 52.5,
+                ship_battles: 567,
+                pr: 1234,
+                avg_damage: 98765.0,
+                frags: 1.2,
             },
         ];
 
@@ -183,52 +333,79 @@ impl Sandbox for StatsViewer {
     fn view(&self) -> Element<Message> {
         let create_player_view = |player: &Player| {
             container(
-                column![
-                    row![
-                        text(&player.clan)
-                            .size(16)
-                            .style(Color::from_rgb(0.7, 0.7, 0.7))
-                            .font(CUSTOM_FONT),
-                        text(&player.name)
-                            .size(16)
-                            .style(Color::from_rgb(0.9, 0.9, 0.9))
-                            .font(CUSTOM_FONT)
+                column![row![
+                    column![styled_text_with_size(&player.name, 16),]
+                        .spacing(4)
+                        .width(Length::FillPortion(1)),
+                    column![
+                        styled_text(&player.ship_name),
+                        row![
+                            styled_text("PR: "),
+                            styled_text_with_color(&format!("{}", player.pr), ORANGE_COLOR)
+                        ]
                     ]
-                    .spacing(8)
-                    .width(Length::Fill),
-                    row![
-                        text(format!("Winrate: {:.2}%", player.winrate))
-                            .size(14)
-                            .style(if player.winrate >= 50.0 {
-                                Color::from_rgb(0.2, 0.8, 0.2)
-                            } else {
-                                Color::from_rgb(0.8, 0.2, 0.2)
-                            })
-                            .font(CUSTOM_FONT),
-                        text(format!("Battles: {}", player.battles))
-                            .size(14)
-                            .style(Color::from_rgb(0.8, 0.8, 0.8))
-                            .font(CUSTOM_FONT),
-                        text(format!("PR: {}", player.pr))
-                            .size(14)
-                            .style(Color::from_rgb(0.8, 0.8, 0.2))
-                            .font(CUSTOM_FONT)
+                    .spacing(4)
+                    .width(Length::FillPortion(1)),
+                    column![
+                        row![
+                            styled_text("Account Battles: "),
+                            styled_text_with_color(&format!("{}", player.battles), GREEN_COLOR)
+                        ],
+                        row![
+                            styled_text("Account WR: "),
+                            styled_text_with_color(
+                                &format!("{:.1}%", player.winrate),
+                                if player.winrate >= 50.0 {
+                                    ORANGE_COLOR
+                                } else {
+                                    RED_COLOR
+                                }
+                            )
+                        ],
                     ]
-                    .spacing(15)
-                    .width(Length::Fill),
-                    row![
-                        text(format!("Avg Damage: {:.0}", player.avg_damage))
-                            .size(14)
-                            .style(Color::from_rgb(0.8, 0.8, 0.8))
-                            .font(CUSTOM_FONT),
-                        text(format!("Wins: {}", player.wins))
-                            .size(14)
-                            .style(Color::from_rgb(0.8, 0.8, 0.8))
-                            .font(CUSTOM_FONT)
+                    .spacing(4)
+                    .width(Length::FillPortion(1)),
+                    column![
+                        row![
+                            styled_text("Ship Battles: "),
+                            styled_text_with_color(
+                                &format!("{}", player.ship_battles),
+                                GREEN_COLOR
+                            )
+                        ],
+                        row![
+                            styled_text("Ship WR: "),
+                            styled_text_with_color(
+                                &format!("{:.1}%", player.ship_winrate),
+                                if player.ship_winrate >= 50.0 {
+                                    ORANGE_COLOR
+                                } else {
+                                    RED_COLOR
+                                }
+                            )
+                        ],
                     ]
-                    .spacing(15)
-                    .width(Length::Fill)
+                    .spacing(4)
+                    .width(Length::FillPortion(1)),
+                    // Right column (battles)
+                    column![
+                        row![
+                            styled_text("Avg Damage: "),
+                            styled_text_with_color(
+                                &format!("{:.0}", player.avg_damage),
+                                ORANGE_COLOR
+                            )
+                        ],
+                        row![
+                            styled_text("frags: "),
+                            styled_text_with_color(&format!("{}", player.frags), GREEN_COLOR)
+                        ]
+                    ]
+                    .spacing(4)
+                    .width(Length::FillPortion(1))
                 ]
+                .spacing(20)
+                .width(Length::Fill)]
                 .spacing(5)
                 .width(Length::Fill),
             )
@@ -240,33 +417,30 @@ impl Sandbox for StatsViewer {
             .into()
         };
 
-        let team1_column = column(self.team1.iter().map(create_player_view).collect())
-            .spacing(5)
-            .width(Length::Fill);
-        let team2_column = column(self.team2.iter().map(create_player_view).collect())
-            .spacing(5)
-            .width(Length::Fill);
+        let content = row![
+            column(self.team1.iter().map(create_player_view).collect())
+                .spacing(5)
+                .width(Length::FillPortion(1)),
+            column(self.team2.iter().map(create_player_view).collect())
+                .spacing(5)
+                .width(Length::FillPortion(1))
+        ]
+        .spacing(10)
+        .width(Length::Fill);
 
-        container(
-            row![
-                container(team1_column)
-                    .width(Length::FillPortion(1))
-                    .padding(5),
-                container(team2_column)
-                    .width(Length::FillPortion(1))
-                    .padding(5)
-            ]
-            .spacing(10)
+        let scrollable_content = scrollable(content)
             .width(Length::Fill)
-            .height(Length::Fill),
-        )
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .padding(10)
-        .style(theme::Container::Custom(Box::new(
-            CustomContainer::Background,
-        )))
-        .into()
+            .height(Length::Fill)
+            .style(theme::Scrollable::Custom(Box::new(CustomScrollable)));
+
+        container(scrollable_content)
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .padding(10)
+            .style(theme::Container::Custom(Box::new(
+                CustomContainer::Background,
+            )))
+            .into()
     }
 }
 
@@ -283,20 +457,47 @@ impl container::StyleSheet for CustomContainer {
     fn appearance(&self, _style: &Self::Style) -> container::Appearance {
         match self {
             CustomContainer::Background => container::Appearance {
-                background: Some(iced::Background::Color(Color::from_rgb(
-                    0.169, 0.176, 0.192, // #2B2D31 - Discord background
-                ))),
+                background: Some(iced::Background::Color(DISCORD_BACKGROUND)),
                 ..Default::default()
             },
             CustomContainer::PlayerCard => container::Appearance {
-                background: Some(iced::Background::Color(Color::from_rgb(
-                    0.208, 0.216, 0.235, // #35373C - Discord message/card color
-                ))),
+                background: Some(iced::Background::Color(DISCORD_CARD)),
                 border_radius: 8.0.into(),
                 border_width: 0.0,
                 ..Default::default()
             },
         }
+    }
+}
+
+// Add custom scrollable style
+#[derive(Debug, Clone, Copy)]
+struct CustomScrollable;
+
+impl scrollable::StyleSheet for CustomScrollable {
+    type Style = Theme;
+
+    fn active(&self, _style: &Self::Style) -> scrollable::Scrollbar {
+        scrollable::Scrollbar {
+            background: Some(iced::Background::Color(DISCORD_BACKGROUND)),
+            border_radius: 0.0.into(),
+            border_width: 0.0,
+            border_color: Color::TRANSPARENT,
+            scroller: scrollable::Scroller {
+                color: DISCORD_BLACK,
+                border_radius: 4.0.into(),
+                border_width: 0.0,
+                border_color: Color::TRANSPARENT,
+            },
+        }
+    }
+
+    fn hovered(&self, _style: &Self::Style, is_mouse_over: bool) -> scrollable::Scrollbar {
+        self.active(_style)
+    }
+
+    fn dragging(&self, _style: &Self::Style) -> scrollable::Scrollbar {
+        self.active(_style)
     }
 }
 
