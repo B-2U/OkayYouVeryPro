@@ -1,27 +1,29 @@
+use std::path::PathBuf;
+
 use iced::application::StyleSheet;
 use iced::font::Weight;
 use iced::theme::{self, Container as ThemeContainer, Text as TextTheme};
-use iced::widget::{column, container, row, scrollable, text, Container, Text};
+use iced::widget::container::Appearance;
+use iced::widget::{
+    button, column, container, image as iced_image, row, scrollable, svg, text, Button, Container,
+    Text,
+};
 use iced::Color;
-use iced::Font;
-use iced::{Application, Element, Length, Settings, Theme};
-use image;
-use tracing::{error, info, warn};
+use iced::{Application, Command, Element, Length, Settings, Theme};
+use image as image_rs;
+use rfd::FileDialog;
+use tracing::level_filters::LevelFilter;
+use tracing::{debug, error, info, warn};
 
 mod colors;
 mod config;
 mod my_text;
-use colors::*;
 use config::Config;
 use my_text::*;
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
 
-// Define the custom font
-const CUSTOM_FONT: Font = Font {
-    family: iced::font::Family::SansSerif,
-    weight: Weight::Bold,
-    stretch: iced::font::Stretch::Normal,
-    monospaced: false,
-};
+use crate::colors::*;
 
 // Player statistics structure
 #[derive(Debug, Clone)]
@@ -41,11 +43,152 @@ struct Player {
 struct StatsViewer {
     team1: Vec<Player>,
     team2: Vec<Player>,
+    config: Config,
+    last_folder_path: Option<String>,
 }
 
 #[derive(Debug, Clone)]
 enum Message {
     WindowResized(u32, u32),
+    OpenGithub,
+    OpenFolderDialog,
+    PlayerNameClicked(String),
+    Nothing,
+}
+
+#[derive(Debug, Clone, Copy)]
+enum Icon {
+    Home,
+    Folder,
+}
+
+impl Icon {
+    fn path(self) -> &'static [u8] {
+        match self {
+            Icon::Home => include_bytes!("../assets/home_80dp_FFF_FILL0_wght400_GRAD0_opsz48.svg"),
+            Icon::Folder => {
+                include_bytes!("../assets/folder_80dp_FFF_FILL0_wght400_GRAD0_opsz48.svg")
+            }
+        }
+    }
+
+    fn handle(self) -> svg::Handle {
+        svg::Handle::from_memory(self.path().to_vec())
+    }
+
+    fn size() -> f32 {
+        28.0
+    }
+
+    fn button(self, message: Message, config: &Config) -> Button<'static, Message> {
+        button(svg(self.handle()).width(Length::Fixed(Icon::size())))
+            .on_press(message)
+            .style(theme::Button::Custom(Box::new(IconButton::new(
+                self, config,
+            ))))
+            .padding(5)
+    }
+}
+
+// Add custom button style for player name
+#[derive(Debug, Clone, Copy)]
+struct PlayerNameButton;
+
+impl button::StyleSheet for PlayerNameButton {
+    type Style = Theme;
+
+    fn active(&self, _style: &Self::Style) -> button::Appearance {
+        button::Appearance {
+            text_color: TEXT_COLOR,
+            ..Default::default()
+        }
+    }
+
+    fn hovered(&self, _style: &Self::Style) -> button::Appearance {
+        button::Appearance {
+            text_color: DISCORD_BLUE,
+            ..Default::default()
+        }
+    }
+
+    fn pressed(&self, _style: &Self::Style) -> button::Appearance {
+        button::Appearance {
+            text_color: DISCORD_BLUE,
+            ..Default::default()
+        }
+    }
+}
+
+// Add custom button style for icons
+#[derive(Debug, Clone, Copy)]
+struct IconButton {
+    icon: Icon,
+    background_color: Color,
+}
+
+impl IconButton {
+    fn new(icon: Icon, config: &Config) -> Self {
+        let background_color = if let Icon::Folder = icon {
+            if config.replay_path().exists() {
+                GREEN_COLOR
+            } else {
+                RED_COLOR
+            }
+        } else {
+            DISCORD_TOP_BAR
+        };
+        Self {
+            icon,
+            background_color,
+        }
+    }
+}
+
+impl button::StyleSheet for IconButton {
+    type Style = Theme;
+
+    fn active(&self, _style: &Self::Style) -> button::Appearance {
+        button::Appearance {
+            background: Some(iced::Background::Color(self.background_color)),
+            border_radius: 4.0.into(),
+            border_width: 0.0,
+            border_color: Color::TRANSPARENT,
+            text_color: Color::WHITE,
+            ..Default::default()
+        }
+    }
+
+    fn hovered(&self, _style: &Self::Style) -> button::Appearance {
+        let hover_color = match self.background_color {
+            c if c == GREEN_COLOR => LIGHT_GREEN_COLOR,
+            c if c == RED_COLOR => LIGHT_RED_COLOR,
+            _ => DISCORD_TOP_BAR,
+        };
+        button::Appearance {
+            background: Some(iced::Background::Color(hover_color)),
+            border_radius: 4.0.into(),
+            border_width: 0.0,
+            border_color: Color::TRANSPARENT,
+            text_color: Color::WHITE,
+            ..Default::default()
+        }
+    }
+
+    fn pressed(&self, _style: &Self::Style) -> button::Appearance {
+        let pressed_color = match self.background_color {
+            c if c == GREEN_COLOR => DARK_GREEN_COLOR,
+            c if c == RED_COLOR => DARK_RED_COLOR,
+            _ => DISCORD_TOP_BAR,
+        };
+        button::Appearance {
+            background: Some(iced::Background::Color(pressed_color)),
+            border_radius: 4.0.into(),
+            border_width: 0.0,
+            border_color: Color::TRANSPARENT,
+            text_color: Color::WHITE,
+            ..Default::default()
+        }
+    }
 }
 
 impl Application for StatsViewer {
@@ -56,6 +199,8 @@ impl Application for StatsViewer {
 
     fn new(_flags: ()) -> (Self, iced::Command<Message>) {
         info!("Initializing StatsViewer");
+        let config = Config::load();
+        let last_folder_path = config.selected_folder.clone();
         // Initialize with sample data
         let team1 = vec![
             Player {
@@ -327,7 +472,15 @@ impl Application for StatsViewer {
             },
         ];
 
-        (StatsViewer { team1, team2 }, iced::Command::none())
+        (
+            Self {
+                team1,
+                team2,
+                config,
+                last_folder_path,
+            },
+            Command::none(),
+        )
     }
 
     fn title(&self) -> String {
@@ -338,17 +491,14 @@ impl Application for StatsViewer {
         iced::subscription::events().map(|event| {
             if let iced::Event::Window(window_event) = event {
                 if let iced::window::Event::Resized { width, height } = window_event {
-                    Message::WindowResized(width, height)
-                } else {
-                    Message::WindowResized(0, 0) // This won't be used
+                    return Message::WindowResized(width, height);
                 }
-            } else {
-                Message::WindowResized(0, 0) // This won't be used
             }
+            Message::Nothing
         })
     }
 
-    fn update(&mut self, message: Message) -> iced::Command<Message> {
+    fn update(&mut self, message: Message) -> Command<Message> {
         match message {
             Message::WindowResized(width, height) => {
                 if width > 0 && height > 0 {
@@ -361,17 +511,42 @@ impl Application for StatsViewer {
                     config.save();
                 }
             }
+            Message::OpenGithub => {
+                if let Err(e) = open::that("https://github.com/B-2U/OkayYouVeryPro") {
+                    error!("Failed to open GitHub page: {}", e);
+                }
+            }
+            Message::OpenFolderDialog => {
+                if let Some(folder) = FileDialog::new().pick_folder() {
+                    info!("Selected folder: {:?}", folder);
+                    let mut config = Config::load();
+                    config.selected_folder = Some(folder.to_string_lossy().to_string());
+                    config.save();
+                    self.config = config;
+                    self.last_folder_path = self.config.selected_folder.clone();
+                }
+            }
+            Message::PlayerNameClicked(name) => {
+                if let Err(e) = open::that(format!("https://example.com/player/{}", name)) {
+                    error!("Failed to open player profile: {}", e);
+                }
+            }
+            Message::Nothing => {}
         }
-        iced::Command::none()
+        Command::none()
     }
 
     fn view(&self) -> Element<Message> {
+        // Force view update when folder path changes
+        let _ = self.last_folder_path;
         let create_player_view = |player: &Player| {
             container(
                 column![row![
-                    column![styled_text_with_size(&player.name, 16),]
-                        .spacing(4)
-                        .width(Length::FillPortion(1)),
+                    column![button(text(&player.name).size(16))
+                        .style(theme::Button::Custom(Box::new(PlayerNameButton)))
+                        .on_press(Message::PlayerNameClicked(player.name.clone()))]
+                    .spacing(4)
+                    .width(Length::FillPortion(1)),
                     column![
                         styled_text(&player.ship_name),
                         row![
@@ -383,11 +558,11 @@ impl Application for StatsViewer {
                     .width(Length::FillPortion(1)),
                     column![
                         row![
-                            styled_text("Account Battles: "),
+                            styled_text("Acc Battles: "),
                             styled_text_with_color(&format!("{}", player.battles), GREEN_COLOR)
                         ],
                         row![
-                            styled_text("Account WR: "),
+                            styled_text("Acc WR: "),
                             styled_text_with_color(
                                 &format!("{:.1}%", player.winrate),
                                 if player.winrate >= 50.0 {
@@ -425,14 +600,14 @@ impl Application for StatsViewer {
                     // Right column (battles)
                     column![
                         row![
-                            styled_text("Avg Damage: "),
+                            styled_text("Avg Dmg: "),
                             styled_text_with_color(
                                 &format!("{:.0}", player.avg_damage),
                                 ORANGE_COLOR
                             )
                         ],
                         row![
-                            styled_text("frags: "),
+                            styled_text("Avg Frags: "),
                             styled_text_with_color(&format!("{}", player.frags), GREEN_COLOR)
                         ]
                     ]
@@ -452,7 +627,7 @@ impl Application for StatsViewer {
             .into()
         };
 
-        let content = row![
+        let player_content = row![
             column(self.team1.iter().map(create_player_view).collect())
                 .spacing(5)
                 .width(Length::FillPortion(1)),
@@ -461,21 +636,41 @@ impl Application for StatsViewer {
                 .width(Length::FillPortion(1))
         ]
         .spacing(10)
+        .padding(20)
         .width(Length::Fill);
 
-        let scrollable_content = scrollable(content)
+        let scrollable_content = scrollable(player_content)
             .width(Length::Fill)
             .height(Length::Fill)
             .style(theme::Scrollable::Custom(Box::new(CustomScrollable)));
 
-        container(scrollable_content)
+        let top_bar = container(
+            row![container(
+                row![
+                    Icon::Home.button(Message::OpenGithub, &self.config),
+                    Icon::Folder.button(Message::OpenFolderDialog, &self.config),
+                ]
+                .spacing(8)
+            )
             .width(Length::Fill)
-            .height(Length::Fill)
-            .padding(10)
-            .style(theme::Container::Custom(Box::new(
-                CustomContainer::Background,
-            )))
-            .into()
+            .align_x(iced::alignment::Horizontal::Right)]
+            .padding([2, 5]),
+        )
+        .style(theme::Container::Custom(Box::new(CustomContainer::TopBar)))
+        .width(Length::Fill)
+        .height(Length::Fixed(44.0));
+
+        container(
+            column![top_bar, container(scrollable_content)]
+                .spacing(0)
+                .height(Length::Fill),
+        )
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .style(theme::Container::Custom(Box::new(
+            CustomContainer::Background,
+        )))
+        .into()
     }
 }
 
@@ -483,6 +678,7 @@ impl Application for StatsViewer {
 #[derive(Debug, Clone, Copy)]
 pub enum CustomContainer {
     Background,
+    TopBar,
     PlayerCard,
 }
 
@@ -491,6 +687,13 @@ impl container::StyleSheet for CustomContainer {
 
     fn appearance(&self, _style: &Self::Style) -> container::Appearance {
         match self {
+            CustomContainer::TopBar => container::Appearance {
+                background: Some(iced::Background::Color(DISCORD_TOP_BAR)),
+                border_width: 0.0,
+                border_color: Color::TRANSPARENT,
+                border_radius: 0.0.into(),
+                ..Default::default()
+            },
             CustomContainer::Background => container::Appearance {
                 background: Some(iced::Background::Color(DISCORD_BACKGROUND)),
                 ..Default::default()
@@ -514,7 +717,7 @@ impl scrollable::StyleSheet for CustomScrollable {
 
     fn active(&self, _style: &Self::Style) -> scrollable::Scrollbar {
         scrollable::Scrollbar {
-            background: Some(iced::Background::Color(DISCORD_BACKGROUND)),
+            background: Some(iced::Background::Color(DISCORD_CARD)),
             border_radius: 0.0.into(),
             border_width: 0.0,
             border_color: Color::TRANSPARENT,
@@ -537,19 +740,30 @@ impl scrollable::StyleSheet for CustomScrollable {
 }
 
 fn main() -> iced::Result {
-    // Initialize tracing
+    // Get the config directory and ensure it exists
+    let config_dir = dirs::config_dir().unwrap_or_else(|| PathBuf::from("."));
+    let log_dir = config_dir.join("okay-you-very-pro");
+    std::fs::create_dir_all(&log_dir).expect("Failed to create log directory");
+
+    // Initialize tracing with both file and console output
     let file_appender = tracing_appender::rolling::RollingFileAppender::new(
         tracing_appender::rolling::Rotation::DAILY,
-        "logs",
+        log_dir.clone(),
         "app.log",
     );
 
     let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
-    tracing_subscriber::fmt()
-        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
-        .with_writer(non_blocking)
+
+    tracing_subscriber::fmt::Subscriber::builder()
+        // subscriber configuration
+        .with_max_level(tracing::Level::INFO)
+        .with_line_number(true)
+        .finish()
+        // add additional writers
+        .with(tracing_subscriber::fmt::Layer::default().with_writer(non_blocking))
         .init();
 
+    info!("Log directory: {:?}", log_dir);
     info!("Starting application");
     let config = Config::load();
     info!("Loaded initial config: {:?}", config);
@@ -558,7 +772,7 @@ fn main() -> iced::Result {
     settings.window.resizable = true;
 
     // Load and set the icon
-    if let Ok(icon) = image::open("assets/icon.png") {
+    if let Ok(icon) = image_rs::open("assets/icon.png") {
         let (width, height) = (icon.width(), icon.height());
         let rgba_bytes = icon.into_rgba8().into_raw();
         settings.window.icon = Some(
